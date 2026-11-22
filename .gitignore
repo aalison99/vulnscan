@@ -1,0 +1,21 @@
+# Compiled scanner binary (large, build artifact)
+/vulnscan
+
+# Node
+node_modules/
+frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local data / env
+data/
+.env
+*.db
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

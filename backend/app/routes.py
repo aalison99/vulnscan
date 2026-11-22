@@ -8,14 +8,14 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
 from . import scanner
 from .config import settings
 from .database import get_session
-from .models import Scan, utcnow
+from .models import AwsFinding, Scan, utcnow
 from .parser import parse_report
 from .schemas import (
     DEFAULT_SCANNERS,
@@ -168,7 +168,8 @@ async def get_scan(scan_id: str, session: AsyncSession = Depends(get_session)):
     scan = await _get_scan(session, scan_id, with_report=True)
     summary = summary_from_model(scan)
 
-    if not scan.report_json:
+    # aws scans keep their findings in their own table (see aws_routes.py)
+    if not scan.report_json or scan.scan_type == "aws":
         return ScanDetail(**summary.model_dump())
 
     parsed = await asyncio.to_thread(parse_report, scan.report_json)
@@ -187,6 +188,7 @@ async def get_scan(scan_id: str, session: AsyncSession = Depends(get_session)):
 async def delete_scan(scan_id: str, session: AsyncSession = Depends(get_session)):
     scan = await _get_scan(session, scan_id)
     scanner.cancel_scan(scan_id)
+    await session.execute(delete(AwsFinding).where(AwsFinding.scan_id == scan_id))
     await session.delete(scan)
     await session.commit()
     return Response(status_code=204)
@@ -250,6 +252,8 @@ async def export_scan(
     scan = await _get_scan(session, scan_id, with_report=True)
     if not scan.report_json:
         raise HTTPException(409, "No report available for this scan")
+    if scan.scan_type == "aws":
+        raise HTTPException(409, "Use /api/scans/{id}/findings/export for aws scans")
 
     base = f"vulnscan-{scan.id[:8]}"
     if fmt == "json":

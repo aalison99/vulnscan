@@ -23,7 +23,7 @@ def _dedupe(values: list[str]) -> list[str]:
 
 
 class ScanCreate(BaseModel):
-    scan_type: Literal["image", "repo"]
+    scan_type: Literal["image", "repo", "aws"]
     target: str = Field(min_length=1, max_length=1024)
     scanners: list[ScannerName] = Field(default_factory=lambda: list(DEFAULT_SCANNERS), min_length=1)
     severities: list[SeverityName] = Field(default_factory=lambda: list(DEFAULT_SEVERITIES), min_length=1)
@@ -149,3 +149,10 @@ def summary_from_model(scan: Scan) -> ScanSummary:
         misconfig_count=scan.misconfig_count,
         secret_count=scan.secret_count,
     )
+
+
+FINDING_STATUSES = ("open", "acknowledged", "fixed", "accepted-risk")
+
+
+class FindingStatusUpdate(BaseModel):
+    status: Literal["open", "acknowledged", "fixed", "accepted-risk"]

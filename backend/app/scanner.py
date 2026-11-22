@@ -18,13 +18,17 @@ from sqlalchemy import select, update
 
 from .config import settings
 from .database import SessionLocal
-from .models import Scan, utcnow
+import json
+import uuid
+
+from .models import AwsFinding, Scan, utcnow
 from .parser import parse_report
 from .schemas import DEFAULT_SEVERITIES
 
 log = logging.getLogger("vulnscan.scanner")
 
 _IMAGE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\-/:@]{0,511}")
+_AWS_TARGET_RE = re.compile(r"[A-Za-z0-9_.\-]{1,64}(@[a-z0-9\-]{2,25}(,[a-z0-9\-]{2,25}){0,24})?")
 _CONTROL_RE = re.compile(r"[\s\x00-\x1f\x7f]")
 
 _semaphore: Optional[asyncio.Semaphore] = None
@@ -55,6 +59,10 @@ def validate_target(scan_type: str, target: str) -> str:
             raise ValueError("Repository URL must start with http:// or https://")
         if parsed.username or parsed.password:
             raise ValueError("Credentials in repository URLs are not supported")
+    elif scan_type == "aws":
+        # "<profile>[@region1,region2]"; profile "env" = environment credentials, "sample" = demo data
+        if not _AWS_TARGET_RE.fullmatch(target):
+            raise ValueError("AWS target must look like 'profile' or 'profile@us-east-1,ap-south-1'")
     else:
         raise ValueError("Unsupported scan type")
     return target
@@ -230,6 +238,64 @@ async def _get_params(scan_id: str):
         return res.one_or_none()
 
 
+def _aws_scan(target: str) -> dict:
+    """Blocking: collect an inventory (read-only) and run the rules. Runs in a worker thread."""
+    from awsscan import scan_inventory
+    from awsscan.sample import sample_inventory
+
+    profile, _, regions_csv = target.partition("@")
+    if profile == "sample":
+        return scan_inventory(sample_inventory())
+
+    import boto3
+    from botocore.exceptions import BotoCoreError, ProfileNotFound
+
+    from awsscan.inventory import collect
+
+    try:
+        session = boto3.Session(profile_name=None if profile == "env" else profile)
+    except ProfileNotFound:
+        raise ScanError(f"AWS profile '{profile}' not found on the server")
+    regions = [r for r in regions_csv.split(",") if r] or None
+    try:
+        inv = collect(session, regions)
+    except BotoCoreError as e:
+        raise ScanError(f"AWS error: {type(e).__name__}")
+    if not inv["account_id"]:
+        # sts failed: credentials missing or invalid. Do not report an empty "clean" scan.
+        raise ScanError("Could not authenticate to AWS (check server credentials): "
+                        + "; ".join(e["message"] for e in inv["errors"][:2]))
+    return scan_inventory(inv)
+
+
+async def _run_aws(scan_id: str, target: str) -> None:
+    result = await asyncio.to_thread(_aws_scan, target)
+    findings = result["findings"]
+    counts = result["summary"]
+    rows = [
+        AwsFinding(
+            id=str(uuid.uuid4()), scan_id=scan_id, fingerprint=f"{f['rule_id']}|{f['resource_arn']}"[:600],
+            rule_id=f["rule_id"], category=f["category"], environment=f["environment"].split(" ")[0],
+            exposure=f["exposure"], risk_score=f["risk_score"], risk_bucket=f["risk_bucket"],
+            base_severity=f["base_severity"], status="open", data=json.dumps(f),
+        )
+        for f in findings
+    ]
+    async with SessionLocal() as session:
+        exists = (await session.execute(select(Scan.id).where(Scan.id == scan_id))).first()
+        if exists is None:
+            return  # deleted mid-scan
+        session.add_all(rows)
+        await session.commit()
+    await _update(
+        scan_id, status="completed", finished_at=utcnow(), error=None,
+        critical=counts["critical"], high=counts["high"], medium=counts["medium"], low=counts["low"],
+        unknown=0, misconfig_count=len(findings), secret_count=0,
+        report_json=json.dumps({"account_id": result["account_id"], "summary": counts,
+                                "not_assessed": result["not_assessed"]}),
+    )
+
+
 def _read_text(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
@@ -247,6 +313,11 @@ async def _run(scan_id: str, upload_path: Optional[str]) -> None:
 
             await _update(scan_id, status="running", started_at=utcnow())
             workdir = tempfile.mkdtemp(prefix=f"scan-{scan_id[:8]}-", dir=settings.tmp_dir)
+
+            if scan_type == "aws":
+                log.info("scan %s: running aws scan", scan_id)
+                await _run_aws(scan_id, target)
+                return
 
             run_target = target
             if scan_type == "fs":

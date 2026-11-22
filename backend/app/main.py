@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from .config import settings
 from .database import engine, init_db
+from .aws_routes import router as aws_router
 from .routes import router
 from .scanner import recover_stale_scans, shutdown_tasks
 
@@ -32,3 +33,4 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 app.include_router(router)
+app.include_router(aws_router)

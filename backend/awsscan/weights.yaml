@@ -1,0 +1,17 @@
+# Context-aware scoring weights. Edit to tune; defaults are justified in docs/scoring.md.
+# risk = 100 * clamp( base/10 * exploitability * exposure * context )
+exposure:
+  internet: 1.0       # reachable from anywhere
+  cross_account: 0.8  # reachable from other AWS accounts
+  internal: 0.6       # only inside the account / VPC
+environment:
+  prod: 1.0
+  staging: 0.7
+  test: 0.4           # dev, test, sandbox, qa
+  untagged: 0.8       # unknown context: assume close to prod, flagged in output
+sensitivity_bonus: 0.2  # added to context (capped at 1.0) when data is classified sensitive
+sensitive_values: [confidential, restricted, pii, sensitive, high]
+buckets:              # minimum score for each bucket
+  critical: 70
+  high: 50
+  medium: 30

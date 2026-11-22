@@ -17,6 +17,7 @@ import StatusBadge from '../components/StatusBadge'
 import FindingDrawer from '../components/FindingDrawer'
 import type { Selected } from '../components/FindingDrawer'
 import { MisconfigTable, SecretTable, VulnTable } from '../components/FindingsTables'
+import AwsScanView from './AwsScanView'
 
 type Tab = 'vulns' | 'misconfigs' | 'secrets'
 
@@ -125,6 +126,49 @@ export default function ScanDetail() {
         ) : (
           <div className="p-10 text-center text-sm text-slate-500">Loading…</div>
         )}
+      </div>
+    )
+  }
+
+  if (scan.scan_type === 'aws') {
+    return (
+      <div className="space-y-6">
+        {back}
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="break-all font-mono text-xl font-semibold text-white">{scan.target}</h1>
+            <StatusBadge status={scan.status} />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-400">
+            <span>{SCAN_TYPE_LABEL[scan.scan_type]}</span>
+            <span>Started {formatDate(scan.created_at)}</span>
+            <span>Duration {formatDuration(scan.started_at, scan.finished_at)}</span>
+          </div>
+        </div>
+        {error && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</div>
+        )}
+        {active && (
+          <div className="card flex flex-col items-center gap-3 p-12 text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
+            <p className="text-sm text-slate-300">Scanning AWS account (read-only)…</p>
+          </div>
+        )}
+        {scan.status === 'failed' && (
+          <div className="card border-red-500/30 p-6">
+            <div className="mb-3 flex items-center gap-2 text-red-300">
+              <XCircle className="h-5 w-5" />
+              <span className="font-medium">Scan failed</span>
+            </div>
+            <pre className="overflow-x-auto whitespace-pre-wrap rounded-lg bg-ink-900 p-4 font-mono text-xs text-slate-300">
+              {scan.error || 'Unknown error'}
+            </pre>
+            <button type="button" onClick={onDelete} className="btn-danger mt-4">
+              <Trash2 className="h-4 w-4" /> Delete
+            </button>
+          </div>
+        )}
+        <AwsScanView scan={scan} onDelete={onDelete} />
       </div>
     )
   }

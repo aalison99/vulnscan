@@ -1,4 +1,4 @@
-import type { ScanStatus, ScanType, Severity, SeverityCounts } from './types'
+import type { RiskBucket, ScanStatus, ScanType, Severity, SeverityCounts } from './types'
 
 export const SEVERITY_ORDER: Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNKNOWN']
 
@@ -22,6 +22,7 @@ export const SCAN_TYPE_LABEL: Record<ScanType, string> = {
   image: 'Image',
   repo: 'Repository',
   fs: 'Archive',
+  aws: 'AWS Account',
 }
 
 export function countFor(counts: SeverityCounts, sev: Severity): number {
@@ -60,4 +61,26 @@ export const isSafeUrl = (u: string) => /^https?:\/\//i.test(u)
 export function formatLines(start: number | null, end: number | null): string {
   if (!start) return '—'
   return end && end !== start ? `${start}–${end}` : `${start}`
+}
+
+export const BUCKET_ORDER: RiskBucket[] = ['critical', 'high', 'medium', 'low']
+
+export const BUCKET_BADGE: Record<RiskBucket, string> = {
+  critical: SEVERITY_BADGE.CRITICAL,
+  high: SEVERITY_BADGE.HIGH,
+  medium: SEVERITY_BADGE.MEDIUM,
+  low: SEVERITY_BADGE.LOW,
+}
+
+export const BUCKET_HEX: Record<RiskBucket, string> = {
+  critical: SEVERITY_HEX.CRITICAL,
+  high: SEVERITY_HEX.HIGH,
+  medium: SEVERITY_HEX.MEDIUM,
+  low: SEVERITY_HEX.LOW,
+}
+
+export const EXPOSURE_LABEL: Record<string, string> = {
+  internet: 'Internet',
+  cross_account: 'Cross-account',
+  internal: 'Internal',
 }

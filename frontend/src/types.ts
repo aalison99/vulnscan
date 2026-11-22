@@ -1,5 +1,5 @@
 export type ScanStatus = 'queued' | 'running' | 'completed' | 'failed'
-export type ScanType = 'image' | 'repo' | 'fs'
+export type ScanType = 'image' | 'repo' | 'fs' | 'aws'
 export type ScannerName = 'vuln' | 'secret' | 'misconfig'
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN'
 
@@ -89,7 +89,7 @@ export interface ScanDetail extends ScanSummary {
 }
 
 export interface CreateScanRequest {
-  scan_type: 'image' | 'repo'
+  scan_type: 'image' | 'repo' | 'aws'
   target: string
   scanners: ScannerName[]
   severities: Severity[]
@@ -110,4 +110,40 @@ export interface Health {
     status_code?: number
     error?: string
   }
+}
+
+export type RiskBucket = 'critical' | 'high' | 'medium' | 'low'
+export type FindingStatus = 'open' | 'acknowledged' | 'fixed' | 'accepted-risk'
+export const FINDING_STATUSES: FindingStatus[] = ['open', 'acknowledged', 'fixed', 'accepted-risk']
+export type Exposure = 'internet' | 'cross_account' | 'internal'
+
+export interface AwsFinding {
+  id: string
+  scan_id: string
+  rule_id: string
+  cis_id: string
+  category: string
+  title: string
+  description: string
+  resource_arn: string
+  resource_type: string
+  region: string
+  base_severity: number
+  exploitability: number
+  exposure: Exposure
+  remediation: string
+  evidence: Record<string, unknown>
+  tags: Record<string, string>
+  risk_score: number
+  risk_bucket: RiskBucket
+  flat_severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+  breakdown: { base: number; exploitability: number; exposure: number; context: number; final: number }
+  environment: string
+  status: FindingStatus
+}
+
+export interface AwsReport {
+  account_id?: string
+  summary: { total?: number } & Partial<Record<RiskBucket, number>>
+  not_assessed: { service: string; message: string }[]
 }

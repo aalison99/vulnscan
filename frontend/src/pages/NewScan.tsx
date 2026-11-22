@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react'
 import type { ChangeEvent, DragEvent, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileArchive, GitBranch, Container, Loader2, UploadCloud, X } from 'lucide-react'
+import { Cloud, FileArchive, GitBranch, Container, Loader2, UploadCloud, X } from 'lucide-react'
 import { api } from '../api'
 import type { ScannerName, Severity } from '../types'
 import { ALL_SCANNERS, SELECTABLE_SEVERITIES } from '../types'
 import ScannerOptions from '../components/ScannerOptions'
 
-type Tab = 'image' | 'repo' | 'archive'
+type Tab = 'image' | 'repo' | 'archive' | 'aws'
 
 const PRESETS = ['alpine:3.19', 'python:3.11-slim', 'nginx:latest']
 const MAX_UPLOAD_MB = 200
@@ -16,6 +16,7 @@ const TABS: { key: Tab; label: string; icon: typeof Container }[] = [
   { key: 'image', label: 'Container Image', icon: Container },
   { key: 'repo', label: 'Git Repository', icon: GitBranch },
   { key: 'archive', label: 'Archive Upload', icon: UploadCloud },
+  { key: 'aws', label: 'AWS Account', icon: Cloud },
 ]
 
 const validArchive = (name: string) => /\.(zip|tar\.gz|tgz)$/i.test(name)
@@ -32,6 +33,8 @@ export default function NewScan() {
   const [tab, setTab] = useState<Tab>('image')
   const [image, setImage] = useState('')
   const [repo, setRepo] = useState('')
+  const [awsProfile, setAwsProfile] = useState('sample')
+  const [awsRegions, setAwsRegions] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [dragging, setDragging] = useState(false)
   const [scanners, setScanners] = useState<ScannerName[]>([...ALL_SCANNERS])
@@ -68,13 +71,25 @@ export default function NewScan() {
     e.preventDefault()
     setError(null)
 
-    if (scanners.length === 0) return setError('Select at least one scanner')
-    if (severities.length === 0) return setError('Select at least one severity')
+    if (tab !== 'aws') {
+      if (scanners.length === 0) return setError('Select at least one scanner')
+      if (severities.length === 0) return setError('Select at least one severity')
+    }
 
     setSubmitting(true)
     try {
       let res
-      if (tab === 'archive') {
+      if (tab === 'aws') {
+        const profile = awsProfile.trim()
+        if (!profile) throw new Error('Enter an AWS profile name, "env", or "sample"')
+        const regions = awsRegions.split(',').map((r) => r.trim()).filter(Boolean).join(',')
+        res = await api.createScan({
+          scan_type: 'aws',
+          target: regions && profile !== 'sample' ? `${profile}@${regions}` : profile,
+          scanners: [...ALL_SCANNERS],
+          severities: [...SELECTABLE_SEVERITIES],
+        })
+      } else if (tab === 'archive') {
         if (!file) throw new Error('Choose an archive to upload')
         res = await api.uploadScan(file, scanners, severities)
       } else {
@@ -177,6 +192,53 @@ export default function NewScan() {
           </div>
         )}
 
+        {tab === 'aws' && (
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-slate-300" htmlFor="awsprofile">
+              AWS profile
+            </label>
+            <input
+              id="awsprofile"
+              className="input font-mono"
+              placeholder="profile name, env, or sample"
+              value={awsProfile}
+              onChange={(e) => setAwsProfile(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span>Presets:</span>
+              {['sample', 'env'].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setAwsProfile(p)}
+                  className="rounded-full border border-ink-600 bg-ink-700/40 px-3 py-1 font-mono text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <label className="block text-sm font-medium text-slate-300" htmlFor="awsregions">
+              Regions (optional, comma separated; empty scans all enabled regions)
+            </label>
+            <input
+              id="awsregions"
+              className="input font-mono"
+              placeholder="ap-south-1,us-east-1"
+              value={awsRegions}
+              onChange={(e) => setAwsRegions(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className="text-xs text-slate-500">
+              <code>sample</code> scans built-in demo data with no AWS access. <code>env</code> uses the
+              server's environment credentials; any other value is a named profile on the server. The scan is
+              read-only and credentials are never stored.
+            </p>
+          </div>
+        )}
+
         {tab === 'archive' && (
           <div>
             <div
@@ -230,14 +292,16 @@ export default function NewScan() {
           </div>
         )}
 
-        <div className="border-t border-ink-600/60 pt-6">
-          <ScannerOptions
-            scanners={scanners}
-            severities={severities}
-            onScanners={setScanners}
-            onSeverities={setSeverities}
-          />
-        </div>
+        {tab !== 'aws' && (
+          <div className="border-t border-ink-600/60 pt-6">
+            <ScannerOptions
+              scanners={scanners}
+              severities={severities}
+              onScanners={setScanners}
+              onSeverities={setSeverities}
+            />
+          </div>
+        )}
 
         {error && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">

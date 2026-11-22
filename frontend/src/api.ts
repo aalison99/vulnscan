@@ -1,5 +1,8 @@
 import type {
+  AwsFinding,
+  AwsReport,
   CreateScanRequest,
+  FindingStatus,
   Health,
   ScanCreated,
   ScanDetail,
@@ -66,6 +69,20 @@ export const api = {
 
   deleteScan: (id: string) =>
     request<void>(`/scans/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  awsFindings: (id: string) =>
+    request<AwsFinding[]>(`/scans/${encodeURIComponent(id)}/findings?limit=5000`),
+
+  awsReport: (id: string) => request<AwsReport>(`/scans/${encodeURIComponent(id)}/aws-report`),
+
+  updateFinding: (id: string, status: FindingStatus) =>
+    request<AwsFinding>(`/findings/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    }),
+
+  awsCsvUrl: (id: string) => `${BASE}/scans/${encodeURIComponent(id)}/findings/export`,
 
   health: () => request<Health>('/health'),
 

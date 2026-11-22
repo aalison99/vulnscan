@@ -99,6 +99,30 @@ curl -X POST http://localhost:8080/api/scans \
   -d '{"scan_type":"image","target":"alpine:3.19"}'
 ```
 
+## AWS misconfiguration scanning
+
+The `aws` scan type checks an AWS account for misconfigurations and ranks findings by a context-aware risk score instead of raw severity. It is read-only and implemented in `backend/awsscan/`.
+
+- 21 rules across IAM, S3, network, logging and encryption, each tagged with a CIS AWS Foundations Benchmark v3.0 control id. **The control ids have not been verified against the benchmark PDF.**
+- Score = severity x exploitability x exposure x environment context. See [docs/scoring.md](docs/scoring.md).
+- Checks that cannot be read (for example AccessDenied) are listed as "could not be assessed", never reported as passes.
+
+Try it without AWS: choose **New Scan > AWS Account** and keep the profile `sample`, or run the CLI:
+
+```bash
+cd backend
+python -m awsscan sample                      # built-in demo data
+python -m awsscan scan --profile myprofile --regions ap-south-1 --out findings.json
+```
+
+Scan target for the API/UI: `sample`, `env` (server environment credentials) or a named profile, optionally `profile@region1,region2`. Credentials are read from the server only and are never stored. Give the scanning identity the AWS managed policies `SecurityAudit` and `ViewOnlyAccess` (read-only). Do not use a production account for testing.
+
+Tests (no AWS needed, uses `moto`):
+
+```bash
+cd backend && pip install -r requirements-dev.txt && pytest
+```
+
 ## Local frontend development
 
 ```bash

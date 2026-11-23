@@ -1,0 +1,66 @@
+# Full stack incl. image/repo/archive scanning. Requires the compiled `vulnscan` binary in the repo root.
+#   docker compose -f docker-compose.full.yml up --build
+services:
+  vulnscan-server:
+    build:
+      context: .
+      dockerfile: vulnscan-server/Dockerfile
+    container_name: vulnscan-server
+    restart: unless-stopped
+    expose:
+      - "4954"
+    volumes:
+      - vulnscan-cache:/root/.cache
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4954/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 300s   # first boot downloads the vulnerability DB
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: vulnscan-backend
+    restart: unless-stopped
+    depends_on:
+      vulnscan-server:
+        condition: service_healthy
+    environment:
+      VULNSCAN_SERVER_URL: http://vulnscan-server:4954
+      DATABASE_URL: sqlite+aiosqlite:////data/vulnscan.db
+      DATA_DIR: /data
+      SCAN_TIMEOUT_SECONDS: "900"
+      MAX_UPLOAD_MB: "200"
+    expose:
+      - "8000"
+    volumes:
+      - vulnscan-data:/data
+      - vulnscan-backend-cache:/root/.cache   # client-side layer/image cache
+      # Optional: scan images from the local Docker daemon (read-only).
+      # Note: this gives the container visibility into the host's Docker.
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=5).status == 200 else 1)"]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vulnscan-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${VULNSCAN_UI_PORT:-8080}:80"
+
+volumes:
+  vulnscan-cache:
+  vulnscan-backend-cache:
+  vulnscan-data:

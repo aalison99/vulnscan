@@ -49,7 +49,8 @@ To use a different port: `VULNSCAN_UI_PORT=9090 docker compose up --build`.
 ```
 vulnscan/
 ├── vulnscan                  # your binary (not committed)
-├── docker-compose.yml
+├── docker-compose.yml        # default: AWS scanner only (no binary needed)
+├── docker-compose.full.yml   # full stack, needs the binary
 ├── vulnscan-server/Dockerfile
 ├── backend/
 │   ├── Dockerfile
@@ -117,15 +118,15 @@ python -m awsscan scan --profile myprofile --regions ap-south-1 --out findings.j
 
 Scan target for the API/UI: `sample`, `env` (server environment credentials) or a named profile, optionally `profile@region1,region2`. Credentials are read from the server only and are never stored. Give the scanning identity the AWS managed policies `SecurityAudit` and `ViewOnlyAccess` (read-only). Do not use a production account for testing.
 
-### Run without the `vulnscan` binary (AWS scanner only)
+### Docker: which compose file
 
-The full `docker-compose.yml` needs your compiled `vulnscan` binary in the repo root. To run only the AWS scanner UI and API:
+`docker compose up --build` runs the AWS scanner UI and API and needs no extra files. The full stack (image, repo and archive scanning too) is `docker-compose.full.yml` and needs your compiled `vulnscan` binary in the repo root:
 
 ```bash
-docker compose -f docker-compose.aws.yml up --build
+docker compose -f docker-compose.full.yml up --build
 ```
 
-Open http://localhost:8080, then **New Scan > AWS Account** with profile `sample`. Image, repo and archive scans are not available in this mode. To scan a real account, uncomment the read-only `~/.aws` mount in `docker-compose.aws.yml`.
+Open http://localhost:8080, then **New Scan > AWS Account** with profile `sample`. Image, repo and archive scans are not available in the default stack. To scan a real account, uncomment the read-only `~/.aws` mount in `docker-compose.yml`.
 
 Tests (no AWS needed, uses `moto`):
 

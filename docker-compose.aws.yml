@@ -1,0 +1,41 @@
+# Runs only the AWS scanner UI and API. Needs no vulnscan binary.
+#   docker compose -f docker-compose.aws.yml up --build
+# Open http://localhost:8080, then New Scan > AWS Account > "sample".
+# For a real account, mount credentials read-only and use profile "env" or a profile name (see README).
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.aws
+    container_name: vulnscan-backend-aws
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////data/vulnscan.db
+      DATA_DIR: /data
+    expose:
+      - "8000"
+    volumes:
+      - aws-data:/data
+      # Real AWS scans only: uncomment to expose a profile read-only.
+      # - ~/.aws:/root/.aws:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/scans', timeout=5).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vulnscan-frontend-aws
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${VULNSCAN_UI_PORT:-8080}:80"
+
+volumes:
+  aws-data:

@@ -18,6 +18,7 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
+COPY backend/awsscan ./awsscan
 
 RUN mkdir -p /data
 

@@ -117,15 +117,13 @@ python -m awsscan scan --profile myprofile --regions ap-south-1 --out findings.j
 
 Scan target for the API/UI: `sample`, `env` (server environment credentials) or a named profile, optionally `profile@region1,region2`. Credentials are read from the server only and are never stored. Give the scanning identity the AWS managed policies `SecurityAudit` and `ViewOnlyAccess` (read-only). Do not use a production account for testing.
 
-### Run without the `vulnscan` binary (AWS scanner only)
-
-The full `docker-compose.yml` needs your compiled `vulnscan` binary in the repo root. To run only the AWS scanner UI and API:
+### Docker
 
 ```bash
-docker compose -f docker-compose.aws.yml up --build
+docker compose up --build
 ```
 
-Open http://localhost:8080, then **New Scan > AWS Account** with profile `sample`. Image, repo and archive scans are not available in this mode. To scan a real account, uncomment the read-only `~/.aws` mount in `docker-compose.aws.yml`.
+No compiled binary is needed. Open http://localhost:8080, then **New Scan > AWS Account** with profile `sample`. The old image/repo/archive scan types need the external `vulnscan` binary, which is no longer part of the Docker build, so they do not work in Docker. To scan a real account, uncomment the read-only `~/.aws` mount in `docker-compose.yml`.
 
 Tests (no AWS needed, uses `moto`):
 
